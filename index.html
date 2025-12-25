@@ -1,30 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Tetri-Jenga</title>
     <style>
-        body { margin: 0; padding: 0; background: #000; overflow: hidden; font-family: Arial, sans-serif; }
-        canvas { display: block; }
+        body { margin: 0; background: #000; font-family: Arial; }
         #ui { position: absolute; top: 20px; left: 20px; color: white; z-index: 100; }
-        #score { font-size: 24px; margin-bottom: 10px; }
-        #instructions { font-size: 14px; opacity: 0.8; }
         #gameOver { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); 
-                   color: white; text-align: center; font-size: 32px; display: none; z-index: 200; }
+                   color: white; text-align: center; display: none; z-index: 200; }
     </style>
 </head>
 <body>
     <div id="ui">
         <div id="score">Score: 0</div>
-        <div id="instructions">
-            WASD: Move | Q/E: Rotate | Space/Double-click: Drop<br>
-            Mouse: Rotate camera | Stack pieces carefully!
-        </div>
+        <div>WASD: Move | Q/E: Rotate | Space/Click: Drop | Mouse: Camera</div>
     </div>
     <div id="gameOver">
-        <div>GAME OVER</div>
-        <div style="font-size: 18px; margin-top: 20px;">Press R to restart</div>
+        <h2>GAME OVER</h2>
+        <p>Press R to restart</p>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
     <script src="game.js"></script>
