@@ -1,11 +1,13 @@
 class TetriJenga {
     constructor() {
+        console.log('Initializing Tetri-Jenga...');
         this.scene = new THREE.Scene();
         this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
         this.renderer = new THREE.WebGLRenderer({ antialias: true });
         this.renderer.setSize(window.innerWidth, window.innerHeight);
         this.renderer.shadowMap.enabled = true;
         this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+        this.renderer.setClearColor(0x87CEEB);
         document.body.appendChild(this.renderer.domElement);
 
         this.tower = [];
@@ -28,6 +30,7 @@ class TetriJenga {
         this.setupControls();
         this.spawnPiece();
         this.animate();
+        console.log('Game initialized successfully');
     }
 
     setupScene() {
@@ -270,7 +273,7 @@ class TetriJenga {
         const x = Math.cos(this.cameraAngle) * this.cameraRadius;
         const z = Math.sin(this.cameraAngle) * this.cameraRadius;
         this.camera.position.set(x, this.cameraHeight, z);
-        this.camera.lookAt(0, this.towerHeight / 2, 0);
+        this.camera.lookAt(0, Math.max(this.towerHeight / 2, 2), 0);
     }
 
     updateScore() {
@@ -312,7 +315,7 @@ class TetriJenga {
 
 // Start the game
 window.addEventListener('load', () => {
-    new TetriJenga();
+    window.game = new TetriJenga();
 });
 
 // Handle window resize
