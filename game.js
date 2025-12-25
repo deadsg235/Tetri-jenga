@@ -7,7 +7,31 @@ let keys = {}, lastClick = 0;
 function init() {
     // Basic Three.js setup
     scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x87CEEB);
+    
+    // Dynamic space background
+    const spaceGeometry = new THREE.SphereGeometry(500, 32, 32);
+    const spaceMaterial = new THREE.MeshBasicMaterial({
+        color: 0x000033,
+        transparent: true,
+        opacity: 0.8
+    });
+    const spaceSphere = new THREE.Mesh(spaceGeometry, spaceMaterial);
+    spaceSphere.material.side = THREE.BackSide;
+    scene.add(spaceSphere);
+    
+    // Add stars
+    const starsGeometry = new THREE.BufferGeometry();
+    const starsVertices = [];
+    for (let i = 0; i < 1000; i++) {
+        const x = (Math.random() - 0.5) * 1000;
+        const y = (Math.random() - 0.5) * 1000;
+        const z = (Math.random() - 0.5) * 1000;
+        starsVertices.push(x, y, z);
+    }
+    starsGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starsVertices, 3));
+    const starsMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 2 });
+    const stars = new THREE.Points(starsGeometry, starsMaterial);
+    scene.add(stars);
     
     camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
     updateCamera();
@@ -17,17 +41,33 @@ function init() {
     renderer.shadowMap.enabled = true;
     document.body.appendChild(renderer.domElement);
     
-    // Lighting
-    const light = new THREE.DirectionalLight(0xffffff, 1);
+    // Lighting with space ambiance
+    const light = new THREE.DirectionalLight(0x9999ff, 0.8);
     light.position.set(10, 10, 10);
     light.castShadow = true;
     scene.add(light);
-    scene.add(new THREE.AmbientLight(0x404040, 0.4));
+    scene.add(new THREE.AmbientLight(0x330066, 0.4));
     
-    // Ground
+    // Holographic guide
+    const guideGeometry = new THREE.BoxGeometry(0.95, 0.95, 0.95);
+    const guideMaterial = new THREE.MeshBasicMaterial({
+        color: 0x00ffff,
+        transparent: true,
+        opacity: 0.3,
+        wireframe: true
+    });
+    window.holoGuide = new THREE.Mesh(guideGeometry, guideMaterial);
+    window.holoGuide.visible = false;
+    scene.add(window.holoGuide);
+    
+    // Ground with holographic effect
     const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(20, 20),
-        new THREE.MeshLambertMaterial({ color: 0x444444 })
+        new THREE.MeshLambertMaterial({ 
+            color: 0x001133,
+            transparent: true,
+            opacity: 0.7
+        })
     );
     ground.rotation.x = -Math.PI / 2;
     ground.receiveShadow = true;
@@ -282,6 +322,9 @@ function animate() {
         const speed = isRotating ? 0.01 : 0.03;
         currentPiece.position.y -= speed;
         
+        // Update holographic guide
+        updateHoloGuide();
+        
         // Land check - precise collision
         if (checkCollision()) {
             landPiece();
@@ -300,3 +343,29 @@ window.addEventListener('resize', () => {
 
 // Start game
 window.addEventListener('load', init);
+
+function updateHoloGuide() {
+    if (!currentPiece || !window.holoGuide) return;
+    
+    // Find landing position
+    let testY = currentPiece.position.y;
+    const originalY = currentPiece.position.y;
+    
+    // Simulate drop to find landing spot
+    while (testY > 0) {
+        currentPiece.position.y = testY;
+        if (checkCollision()) {
+            testY += 0.1;
+            break;
+        }
+        testY -= 0.1;
+    }
+    
+    // Position holographic guide
+    window.holoGuide.position.copy(currentPiece.position);
+    window.holoGuide.rotation.copy(currentPiece.rotation);
+    window.holoGuide.visible = true;
+    
+    // Restore original position
+    currentPiece.position.y = originalY;
+}
