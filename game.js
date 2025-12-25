@@ -1,328 +1,204 @@
-class TetriJenga {
-    constructor() {
-        console.log('Initializing Tetri-Jenga...');
-        this.scene = new THREE.Scene();
-        this.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-        this.renderer = new THREE.WebGLRenderer({ antialias: true });
-        this.renderer.setSize(window.innerWidth, window.innerHeight);
-        this.renderer.shadowMap.enabled = true;
-        this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-        this.renderer.setClearColor(0x87CEEB);
-        document.body.appendChild(this.renderer.domElement);
+let scene, camera, renderer, currentPiece, tower = [], score = 0, gameOver = false;
+let mouseDown = false, cameraAngle = 0, cameraHeight = 10, isRotating = false;
+let lastClick = 0;
 
-        this.tower = [];
-        this.currentPiece = null;
-        this.score = 0;
-        this.gameOver = false;
-        this.dropSpeed = 0.02;
-        this.gridSize = 1;
-        this.towerHeight = 0;
-        this.isRotatingCamera = false;
-        this.mouseDown = false;
-        this.lastMouseX = 0;
-        this.lastMouseY = 0;
-        this.cameraRadius = 15;
-        this.cameraAngle = 0;
-        this.cameraHeight = 12;
-        this.lastClickTime = 0;
+function init() {
+    // Scene setup
+    scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x87CEEB);
+    
+    // Camera
+    camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+    updateCamera();
+    
+    // Renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    document.body.appendChild(renderer.domElement);
+    
+    // Lighting
+    const light = new THREE.DirectionalLight(0xffffff, 1);
+    light.position.set(5, 10, 5);
+    light.castShadow = true;
+    scene.add(light);
+    scene.add(new THREE.AmbientLight(0x404040, 0.3));
+    
+    // Ground
+    const ground = new THREE.Mesh(
+        new THREE.PlaneGeometry(20, 20),
+        new THREE.MeshLambertMaterial({ color: 0x333333 })
+    );
+    ground.rotation.x = -Math.PI / 2;
+    ground.receiveShadow = true;
+    scene.add(ground);
+    
+    setupControls();
+    spawnPiece();
+    animate();
+}
 
-        this.setupScene();
-        this.setupControls();
-        this.spawnPiece();
-        this.animate();
-        console.log('Game initialized successfully');
-    }
+function updateCamera() {
+    const x = Math.cos(cameraAngle) * 15;
+    const z = Math.sin(cameraAngle) * 15;
+    camera.position.set(x, cameraHeight, z);
+    camera.lookAt(0, 5, 0);
+}
 
-    setupScene() {
-        // Lighting
-        const ambientLight = new THREE.AmbientLight(0x404040, 0.4);
-        this.scene.add(ambientLight);
-        
-        const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-        directionalLight.position.set(10, 20, 10);
-        directionalLight.castShadow = true;
-        directionalLight.shadow.mapSize.width = 2048;
-        directionalLight.shadow.mapSize.height = 2048;
-        this.scene.add(directionalLight);
-
-        // Ground
-        const groundGeometry = new THREE.PlaneGeometry(20, 20);
-        const groundMaterial = new THREE.MeshLambertMaterial({ color: 0x333333 });
-        const ground = new THREE.Mesh(groundGeometry, groundMaterial);
-        ground.rotation.x = -Math.PI / 2;
-        ground.receiveShadow = true;
-        this.scene.add(ground);
-
-        // Camera position
-        this.updateCameraPosition();
-    }
-
-    setupControls() {
-        this.keys = {};
-        window.addEventListener('keydown', (e) => {
-            this.keys[e.code] = true;
-            if (e.code === 'Space') {
-                e.preventDefault();
-                this.hardDrop();
-            }
-            if (e.code === 'KeyR' && this.gameOver) {
-                this.restart();
-            }
-        });
-        window.addEventListener('keyup', (e) => {
-            this.keys[e.code] = false;
-        });
-        
-        // Mouse controls
-        this.renderer.domElement.addEventListener('mousedown', (e) => {
-            this.mouseDown = true;
-            this.lastMouseX = e.clientX;
-            this.lastMouseY = e.clientY;
-            
-            // Double click detection
-            const currentTime = Date.now();
-            if (currentTime - this.lastClickTime < 300) {
-                this.hardDrop();
-            }
-            this.lastClickTime = currentTime;
-        });
-        
-        window.addEventListener('mousemove', (e) => {
-            if (!this.mouseDown) return;
-            
-            const deltaX = e.clientX - this.lastMouseX;
-            const deltaY = e.clientY - this.lastMouseY;
-            
-            this.cameraAngle -= deltaX * 0.01;
-            this.cameraHeight = Math.max(5, Math.min(20, this.cameraHeight + deltaY * 0.05));
-            
-            this.updateCameraPosition();
-            this.isRotatingCamera = Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2;
-            
-            this.lastMouseX = e.clientX;
-            this.lastMouseY = e.clientY;
-        });
-        
-        window.addEventListener('mouseup', () => {
-            this.mouseDown = false;
-            setTimeout(() => { this.isRotatingCamera = false; }, 100);
-        });
-    }
-
-    createPieceGeometry(type) {
-        const shapes = {
-            I: [[0,0,0], [1,0,0], [2,0,0], [3,0,0]],
-            O: [[0,0,0], [1,0,0], [0,0,1], [1,0,1]],
-            T: [[1,0,0], [0,0,0], [2,0,0], [1,0,1]],
-            L: [[0,0,0], [1,0,0], [2,0,0], [2,0,1]],
-            J: [[0,0,0], [1,0,0], [2,0,0], [0,0,1]],
-            S: [[1,0,0], [2,0,0], [0,0,1], [1,0,1]],
-            Z: [[0,0,0], [1,0,0], [1,0,1], [2,0,1]]
-        };
-        
-        const group = new THREE.Group();
-        const geometry = new THREE.BoxGeometry(0.9, 0.9, 0.9);
-        const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffa500];
-        const material = new THREE.MeshLambertMaterial({ color: colors[Math.floor(Math.random() * colors.length)] });
-        
-        shapes[type].forEach(([x, y, z]) => {
-            const cube = new THREE.Mesh(geometry, material);
-            cube.position.set(x, y, z);
-            cube.castShadow = true;
-            cube.receiveShadow = true;
-            group.add(cube);
-        });
-        
-        return group;
-    }
-
-    spawnPiece() {
-        if (this.gameOver) return;
-        
-        const types = ['I', 'O', 'T', 'L', 'J', 'S', 'Z'];
-        const type = types[Math.floor(Math.random() * types.length)];
-        
-        this.currentPiece = {
-            mesh: this.createPieceGeometry(type),
-            position: { x: 0, y: this.towerHeight + 15, z: 0 },
-            velocity: { x: 0, y: -this.dropSpeed, z: 0 },
-            landed: false
-        };
-        
-        this.currentPiece.mesh.position.set(
-            this.currentPiece.position.x,
-            this.currentPiece.position.y,
-            this.currentPiece.position.z
-        );
-        
-        this.scene.add(this.currentPiece.mesh);
-    }
-
-    updateCurrentPiece() {
-        if (!this.currentPiece || this.currentPiece.landed) return;
-
-        // Handle input
-        if (this.keys['KeyA']) this.currentPiece.position.x -= 0.1;
-        if (this.keys['KeyD']) this.currentPiece.position.x += 0.1;
-        if (this.keys['KeyW']) this.currentPiece.position.z -= 0.1;
-        if (this.keys['KeyS']) this.currentPiece.position.z += 0.1;
-        if (this.keys['KeyQ']) this.currentPiece.mesh.rotation.y += 0.05;
-        if (this.keys['KeyE']) this.currentPiece.mesh.rotation.y -= 0.05;
-
-        // Apply gravity (slow motion during camera rotation)
-        const speed = this.isRotatingCamera ? this.currentPiece.velocity.y * 0.3 : this.currentPiece.velocity.y;
-        this.currentPiece.position.y += speed;
-
-        // Check collision with ground or tower
-        if (this.currentPiece.position.y <= this.towerHeight + 1 || this.checkCollision()) {
-            this.landPiece();
+function setupControls() {
+    const keys = {};
+    
+    window.addEventListener('keydown', (e) => {
+        keys[e.code] = true;
+        if (e.code === 'Space') {
+            e.preventDefault();
+            hardDrop();
         }
+        if (e.code === 'KeyR' && gameOver) restart();
+    });
+    
+    window.addEventListener('keyup', (e) => keys[e.code] = false);
+    
+    // Mouse controls
+    renderer.domElement.addEventListener('mousedown', (e) => {
+        mouseDown = true;
+        const now = Date.now();
+        if (now - lastClick < 300) hardDrop();
+        lastClick = now;
+    });
+    
+    window.addEventListener('mousemove', (e) => {
+        if (!mouseDown) return;
+        cameraAngle -= e.movementX * 0.01;
+        cameraHeight = Math.max(5, Math.min(20, cameraHeight - e.movementY * 0.05));
+        updateCamera();
+        isRotating = true;
+    });
+    
+    window.addEventListener('mouseup', () => {
+        mouseDown = false;
+        setTimeout(() => isRotating = false, 100);
+    });
+    
+    // Movement
+    setInterval(() => {
+        if (!currentPiece || gameOver) return;
+        if (keys['KeyA']) currentPiece.position.x -= 0.1;
+        if (keys['KeyD']) currentPiece.position.x += 0.1;
+        if (keys['KeyW']) currentPiece.position.z -= 0.1;
+        if (keys['KeyS']) currentPiece.position.z += 0.1;
+        if (keys['KeyQ']) currentPiece.rotation.y += 0.1;
+        if (keys['KeyE']) currentPiece.rotation.y -= 0.1;
+    }, 16);
+}
 
-        // Update mesh position
-        this.currentPiece.mesh.position.set(
-            this.currentPiece.position.x,
-            this.currentPiece.position.y,
-            this.currentPiece.position.z
-        );
-    }
+function createPiece() {
+    const shapes = [
+        [[0,0,0], [1,0,0], [2,0,0], [3,0,0]], // I
+        [[0,0,0], [1,0,0], [0,0,1], [1,0,1]], // O
+        [[1,0,0], [0,0,0], [2,0,0], [1,0,1]], // T
+    ];
+    
+    const group = new THREE.Group();
+    const shape = shapes[Math.floor(Math.random() * shapes.length)];
+    const colors = [0xff0000, 0x00ff00, 0x0000ff, 0xffff00];
+    const material = new THREE.MeshLambertMaterial({ 
+        color: colors[Math.floor(Math.random() * colors.length)] 
+    });
+    
+    shape.forEach(([x, y, z]) => {
+        const cube = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.9, 0.9), material);
+        cube.position.set(x, y, z);
+        cube.castShadow = true;
+        group.add(cube);
+    });
+    
+    return group;
+}
 
-    checkCollision() {
-        // Simplified collision detection
-        return this.currentPiece.position.y <= this.towerHeight + 1;
-    }
+function spawnPiece() {
+    if (gameOver) return;
+    currentPiece = createPiece();
+    currentPiece.position.set(0, 15, 0);
+    currentPiece.velocity = isRotating ? -0.01 : -0.03;
+    scene.add(currentPiece);
+}
 
-    landPiece() {
-        if (!this.currentPiece) return;
-        
-        this.currentPiece.landed = true;
-        this.tower.push(this.currentPiece.mesh);
-        this.towerHeight = Math.max(this.towerHeight, this.currentPiece.position.y + 1);
-        
-        // Check for complete layers
-        this.checkLineClear();
-        
-        // Check stability
-        if (!this.checkStability()) {
-            this.triggerCollapse();
-            return;
-        }
-        
-        // Check game over
-        if (this.towerHeight > 20) {
-            this.endGame();
-            return;
-        }
-        
-        this.currentPiece = null;
-        setTimeout(() => this.spawnPiece(), 500);
-    }
+function hardDrop() {
+    if (currentPiece) currentPiece.velocity = -0.5;
+}
 
-    checkLineClear() {
-        const layerY = Math.floor(this.currentPiece.position.y);
-        const piecesAtLayer = this.tower.filter(piece => 
-            Math.abs(piece.position.y - layerY) < 0.5
-        );
-        
-        // If layer is densely packed, clear it
-        if (piecesAtLayer.length >= 8) {
-            piecesAtLayer.forEach(piece => {
-                this.scene.remove(piece);
-                this.tower = this.tower.filter(p => p !== piece);
-            });
-            
-            // Move pieces above down
-            this.tower.forEach(piece => {
-                if (piece.position.y > layerY) {
-                    piece.position.y -= 1;
-                }
-            });
-            
-            this.towerHeight -= 1;
-            this.score += 100;
-            this.updateScore();
-        }
-    }
-
-    checkStability() {
-        // Simplified stability check - random chance based on tower height
-        const instabilityChance = Math.min(this.towerHeight * 0.02, 0.3);
-        return Math.random() > instabilityChance;
-    }
-
-    triggerCollapse() {
-        // Simple collapse animation
-        this.tower.forEach((piece, index) => {
-            setTimeout(() => {
-                piece.position.x += (Math.random() - 0.5) * 2;
-                piece.position.z += (Math.random() - 0.5) * 2;
-                piece.rotation.x += Math.random() * 0.5;
-                piece.rotation.z += Math.random() * 0.5;
-            }, index * 50);
+function landPiece() {
+    tower.push(currentPiece);
+    
+    // Check line clear
+    const y = Math.round(currentPiece.position.y);
+    const piecesAtLevel = tower.filter(p => Math.abs(p.position.y - y) < 1);
+    
+    if (piecesAtLevel.length >= 6) {
+        piecesAtLevel.forEach(p => {
+            scene.remove(p);
+            tower = tower.filter(t => t !== p);
         });
-        
-        setTimeout(() => this.endGame(), 2000);
+        tower.forEach(p => { if (p.position.y > y) p.position.y -= 1; });
+        score += 100;
+        document.getElementById('score').textContent = `Score: ${score}`;
     }
+    
+    // Stability check
+    if (Math.random() < 0.1) {
+        tower.forEach(p => {
+            p.position.x += (Math.random() - 0.5) * 2;
+            p.position.z += (Math.random() - 0.5) * 2;
+        });
+        gameOver = true;
+        document.getElementById('gameOver').style.display = 'block';
+        return;
+    }
+    
+    if (currentPiece.position.y > 18) {
+        gameOver = true;
+        document.getElementById('gameOver').style.display = 'block';
+        return;
+    }
+    
+    currentPiece = null;
+    setTimeout(spawnPiece, 500);
+}
 
-    hardDrop() {
-        if (this.currentPiece && !this.currentPiece.landed) {
-            this.currentPiece.velocity.y = -0.5;
+function restart() {
+    tower.forEach(p => scene.remove(p));
+    if (currentPiece) scene.remove(currentPiece);
+    tower = [];
+    currentPiece = null;
+    score = 0;
+    gameOver = false;
+    document.getElementById('gameOver').style.display = 'none';
+    document.getElementById('score').textContent = 'Score: 0';
+    spawnPiece();
+}
+
+function animate() {
+    requestAnimationFrame(animate);
+    
+    if (currentPiece && !gameOver) {
+        currentPiece.position.y += currentPiece.velocity;
+        currentPiece.velocity = isRotating ? -0.01 : -0.03;
+        
+        if (currentPiece.position.y <= 1) {
+            landPiece();
         }
     }
     
-    updateCameraPosition() {
-        const x = Math.cos(this.cameraAngle) * this.cameraRadius;
-        const z = Math.sin(this.cameraAngle) * this.cameraRadius;
-        this.camera.position.set(x, this.cameraHeight, z);
-        this.camera.lookAt(0, Math.max(this.towerHeight / 2, 2), 0);
-    }
-
-    updateScore() {
-        document.getElementById('score').textContent = `Score: ${this.score}`;
-    }
-
-    endGame() {
-        this.gameOver = true;
-        document.getElementById('gameOver').style.display = 'block';
-    }
-
-    restart() {
-        // Clear scene
-        this.tower.forEach(piece => this.scene.remove(piece));
-        if (this.currentPiece) this.scene.remove(this.currentPiece.mesh);
-        
-        // Reset game state
-        this.tower = [];
-        this.currentPiece = null;
-        this.score = 0;
-        this.gameOver = false;
-        this.towerHeight = 0;
-        
-        document.getElementById('gameOver').style.display = 'none';
-        this.updateScore();
-        this.spawnPiece();
-    }
-
-    animate() {
-        requestAnimationFrame(() => this.animate());
-        
-        if (!this.gameOver) {
-            this.updateCurrentPiece();
-        }
-        
-        this.renderer.render(this.scene, this.camera);
-    }
+    renderer.render(scene, camera);
 }
 
-// Start the game
-window.addEventListener('load', () => {
-    window.game = new TetriJenga();
+// Handle resize
+window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-// Handle window resize
-window.addEventListener('resize', () => {
-    if (window.game) {
-        window.game.camera.aspect = window.innerWidth / window.innerHeight;
-        window.game.camera.updateProjectionMatrix();
-        window.game.renderer.setSize(window.innerWidth, window.innerHeight);
-    }
-});
+// Start game
+window.addEventListener('load', init);
