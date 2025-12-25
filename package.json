@@ -1,0 +1,14 @@
+{
+  "name": "tetri-jenga",
+  "version": "1.0.0",
+  "description": "A groundbreaking 3D game combining Tetris and Jenga mechanics",
+  "main": "index.html",
+  "scripts": {
+    "dev": "python -m http.server 3000",
+    "build": "echo 'Static build complete'",
+    "start": "echo 'Production ready'"
+  },
+  "keywords": ["game", "tetris", "jenga", "3d", "webgl", "threejs"],
+  "author": "Your Name",
+  "license": "MIT"
+}
