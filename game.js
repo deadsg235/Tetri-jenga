@@ -115,13 +115,82 @@ function spawnPiece() {
 
 function hardDrop() {
     if (currentPiece && currentPiece.falling) {
-        currentPiece.position.y = getTowerHeight() + 1;
+        while (!checkCollision() && currentPiece.position.y > 0) {
+            currentPiece.position.y -= 0.1;
+        }
+        currentPiece.position.y += 0.1; // Back up slightly
         landPiece();
     }
 }
 
+function checkCollision() {
+    if (!currentPiece) return false;
+    
+    // Check ground collision
+    let minY = Infinity;
+    currentPiece.children.forEach(cube => {
+        const worldPos = new THREE.Vector3();
+        cube.getWorldPosition(worldPos);
+        minY = Math.min(minY, worldPos.y);
+    });
+    
+    if (minY <= 0.5) return true;
+    
+    // Check collision with tower pieces
+    for (let piece of tower) {
+        for (let cube of piece.children) {
+            const cubeWorldPos = new THREE.Vector3();
+            cube.getWorldPosition(cubeWorldPos);
+            
+            for (let currentCube of currentPiece.children) {
+                const currentWorldPos = new THREE.Vector3();
+                currentCube.getWorldPosition(currentWorldPos);
+                
+                // Tight collision: within 0.95 units (cube size is 0.9)
+                const dx = Math.abs(cubeWorldPos.x - currentWorldPos.x);
+                const dy = Math.abs(cubeWorldPos.y - currentWorldPos.y);
+                const dz = Math.abs(cubeWorldPos.z - currentWorldPos.z);
+                
+                if (dx < 0.95 && dy < 0.95 && dz < 0.95) {
+                    return true;
+                }
+            }
+        }
+    }
+    
+    return false;
+}
+
 function getTowerHeight() {
-    return tower.length > 0 ? Math.max(...tower.map(p => p.position.y)) + 1 : 0;
+    if (tower.length === 0) return 0;
+    
+    // Get precise collision height for current piece position
+    const pieceX = Math.round(currentPiece.position.x);
+    const pieceZ = Math.round(currentPiece.position.z);
+    
+    let maxHeight = 0;
+    tower.forEach(piece => {
+        piece.children.forEach(cube => {
+            const worldPos = new THREE.Vector3();
+            cube.getWorldPosition(worldPos);
+            const cubeX = Math.round(worldPos.x);
+            const cubeZ = Math.round(worldPos.z);
+            
+            // Check if any cube of current piece would collide
+            currentPiece.children.forEach(currentCube => {
+                const currentWorldPos = new THREE.Vector3();
+                currentCube.getWorldPosition(currentWorldPos);
+                const currentX = Math.round(currentWorldPos.x);
+                const currentZ = Math.round(currentWorldPos.z);
+                
+                if (Math.abs(cubeX - currentX) < 0.5 && Math.abs(cubeZ - currentZ) < 0.5) {
+                    maxHeight = Math.max(maxHeight, worldPos.y + 1);
+                }
+            });
+        });
+    });
+    
+    return maxHeight;
 }
 
 function landPiece() {
@@ -213,8 +282,8 @@ function animate() {
         const speed = isRotating ? 0.01 : 0.03;
         currentPiece.position.y -= speed;
         
-        // Land check
-        if (currentPiece.position.y <= getTowerHeight() + 1) {
+        // Land check - precise collision
+        if (checkCollision()) {
             landPiece();
         }
     }
